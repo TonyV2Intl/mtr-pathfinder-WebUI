@@ -407,7 +407,7 @@ def gen_route_interval(LOCAL_FILE_PATH, INTERVAL_PATH, LINK, MTR_VER) -> None:
                 dep_s_list = []
                 if len(item) == 1:  # 如果只有一个数据点
                     if x not in dep_dict_per_route_:
-                        dep_dict_per_route_[x] = [(item[0] / 1000 - t) * 1. 25]
+                        dep_dict_per_route_[x] = [(item[0] / 1000 - t) * 1.25]
                 else:  # 多个数据点
                     for y in range(len(item) - 1):
                         dep_s_list.append((item[y + 1] - item[y]) / 1000)  # 计算间隔
