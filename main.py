@@ -93,6 +93,54 @@ except Exception:
 opencc3 = OpenCC('t2s')   #繁体中文转简体中文
 
 
+def fetch_data(LINK: str, LOCAL_FILE_PATH: str, MTR_VER: int) -> str:
+    '''
+    从服务器获取MTR车站和路线数据
+    '''
+    try:
+        # 构建API链接
+        if MTR_VER == 3:
+            api_link = LINK + '/stations?format=json'
+        else:  # MTR_VER == 4
+            api_link = LINK + '/mtr/api/map/data?dimension=0'
+        
+        # 发送请求获取数据
+        response = requests.get(api_link, timeout=30)
+        response.raise_for_status()  # 检查请求是否成功
+        data = response.json()
+        
+        # 处理数据格式
+        if MTR_VER == 3:
+            # MTR 3格式处理
+            if isinstance(data, list) and len(data) > 0:
+                pass  # 数据已经是正确格式
+            else:
+                data = [data]
+        else:
+            # MTR 4格式处理
+            if 'data' in data:
+                data = [data['data']]
+            else:
+                data = [data]
+        
+        # 保存数据到本地文件
+        with open(LOCAL_FILE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        
+        return LOCAL_FILE_PATH  # 返回保存的文件路径
+    except Exception as e:
+        print(f"获取数据失败: {e}")
+        # 如果失败，创建一个空的默认数据
+        default_data = [{
+            'stations': {},
+            'routes': [],
+            'positions': {}
+        }]
+        with open(LOCAL_FILE_PATH, 'w', encoding='utf-8') as f:
+            json.dump(default_data, f, ensure_ascii=False, indent=2)
+        return LOCAL_FILE_PATH
+
+
 #   #HTML模板定义
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -101,6 +149,9 @@ HTML_TEMPLATE = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MTR路径查找器</title>
+    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
+    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
+    {% endif %}
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <style>
         /* 全局样式 */
@@ -1278,8 +1329,25 @@ def gen_route_interval(LOCAL_FILE_PATH, INTERVAL_PATH, LINK, MTR_VER) -> None:
     with open(LOCAL_FILE_PATH, encoding='utf-8') as f:
         data = json.load(f)  # 加载本地数据
 
-    if MTR_VER == 3 and isinstance(data, list) and len(data) > 0:
-        data = [data[0]]
+    # 确保数据是列表格式
+    try:
+        if not isinstance(data, list):
+            data = [data]  # 转换为列表格式
+        if len(data) == 0:
+            data = [{'stations': {}, 'routes': []}]  # 创建默认数据结构
+        
+        # 确保第一个元素是字典且包含必要的字段
+        if not isinstance(data[0], dict):
+            data[0] = {'stations': {}, 'routes': []}
+        
+        # 确保routes字段存在
+        if 'routes' not in data[0]:
+            data[0]['routes'] = []
+            
+        print(f"数据加载成功: 车站数={len(data[0].get('stations', {}))}, 路线数={len(data[0].get('routes', []))}")
+    except Exception as e:
+        print(f"数据格式处理错误: {e}")
+        data = [{'stations': {}, 'routes': []}]
 
     if MTR_VER == 3:  # MTR版本3的处理
         threads: list[Thread] = []
@@ -1334,28 +1402,59 @@ def gen_route_interval(LOCAL_FILE_PATH, INTERVAL_PATH, LINK, MTR_VER) -> None:
 
     elif MTR_VER == 4:  # MTR版本4的处理
         link = LINK.rstrip('/') + '/mtr/api/map/departures?dimension=0'
-        departures = requests.get(link).json()['data']['departures']  # 获取发车数据
+        try:
+            response = requests.get(link)
+            response.raise_for_status()
+            departures_data = response.json()
+            if 'data' not in departures_data:
+                print("警告: 响应数据格式不正确，缺少'data'字段")
+                departures = []
+            else:
+                departures = departures_data['data']['departures']  # 获取发车数据
+        except Exception as e:
+            print(f"获取发车数据失败: {e}")
+            departures = []
         dep_dict: dict[str, list[int]] = {}
         for x in departures:
-            dep_list = set()
-            for y in x['departures']:
-                for z in y['departures']:
-                    dep = round(z / 1000)  # 转换为秒
-                    while dep < 0:
-                        dep += 86400  # 处理负值（跨天）
+            try:
+                dep_list = set()
+                if not x.get('departures'):
+                    continue
+                    
+                for y in x['departures']:
+                    if not y.get('departures'):
+                        continue
+                        
+                    for z in y['departures']:
+                        try:
+                            dep = round(z / 1000)  # 转换为秒
+                            while dep < 0:
+                                dep += 86400  # 处理负值（跨天）
+                            dep_list.add(dep)
+                        except Exception:
+                            pass  # 忽略单个数据点错误
 
-                    dep_list.add(dep)
-
-            dep_list = list(sorted(dep_list))  # 排序
-            dep_dict[x['id']] = dep_list
+                if dep_list:
+                    dep_list = list(sorted(dep_list))  # 排序
+                    if x.get('id'):
+                        dep_dict[x['id']] = dep_list
+            except Exception as e:
+                print(f"处理发车数据时出错: {e}")
+                continue
 
         freq_dict: dict[str, list] = {}
         for route_id, stats in dep_dict.items():
             if len(stats) == 0:
                 continue
 
-            for route_stats in data[0]['routes']:  # 查找路线信息
-                if route_stats['id'] == route_id:
+            # 安全地获取routes数据
+            routes = data[0].get('routes', [])
+            if not routes:
+                print(f'No routes found in data for route_id {route_id}')
+                continue
+                
+            for route_stats in routes:  # 查找路线信息
+                if route_stats.get('id') == route_id:
                     break
             else:
                 print(f'Route {route_id} not found')
@@ -2778,10 +2877,13 @@ def find_route():
 
 
 # 全局配置
-ADMIN_PASSWORD = 'admin123'  # 控制台密码，可修改
+# 优先从环境变量读取配置，若未设置则使用默认值
+ADMIN_PASSWORD = os.environ.get('MTR_ADMIN_PASSWORD', 'admin')   # 控制台密码，可修改
 config = {
-    'LINK': 'https://letsplay.minecrafttransitrailway.com/system-map',
-    'MTR_VER': 4
+    'LINK': os.environ.get('MTR_LINK', 'https://letsplay.minecrafttransitrailway.com/system-map'),
+    'MTR_VER': int(os.environ.get('MTR_VER', 4)),
+    'UMAMI_SCRIPT_URL': os.environ.get('MTR_UMAMI_SCRIPT_URL', ''),   #Umami跟踪脚本URL
+    'UMAMI_WEBSITE_ID': os.environ.get('MTR_UMAMI_WEBSITE_ID', '')    #Umami网站ID
 }
 
 # 控制台页面HTML
@@ -2792,6 +2894,9 @@ ADMIN_HTML = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MTR路径查找器 - 控制台</title>
+    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
+    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
+    {% endif %}
     <style>
         * {
             margin: 0;
@@ -2990,11 +3095,19 @@ ADMIN_HTML = '''
                 <form id="config-form">
                     <div class="form-group">
                         <label for="link">地图链接 (LINK)</label>
-                        <input type="text" id="link" name="link" value="{{ config.LINK }}" required>
+                        <input type="text" id="link" name="link" value="{{ config.LINK }}" placeholder="https://letsplay.minecrafttransitrailway.com/system-map"> required>
                     </div>
                     <div class="form-group">
                         <label for="mtr_ver">MTR版本 (MTR_VER)</label>
                         <input type="number" id="mtr_ver" name="mtr_ver" value="{{ config.MTR_VER }}" min="1" max="10" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="umami_script_url">Umami脚本URL (src)</label>
+                        <input type="text" id="umami_script_url" name="umami_script_url" value="{{ config.UMAMI_SCRIPT_URL }}" placeholder="https://cloud.umami.is/script.js">
+                    </div>
+                    <div class="form-group">
+                        <label for="umami_website_id">Umami网站ID (data-website-id)</label>
+                        <input type="text" id="umami_website_id" name="umami_website_id" value="{{ config.UMAMI_WEBSITE_ID }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
                     </div>
                     <button type="button" class="btn btn-primary" onclick="saveConfig()">保存配置</button>
                     <div id="config-result" style="margin-top: 10px;"></div>
@@ -3014,11 +3127,15 @@ ADMIN_HTML = '''
             function saveConfig() {
                 var link = document.getElementById('link').value;
                 var mtr_ver = document.getElementById('mtr_ver').value;
+                var umami_script_url = document.getElementById('umami_script_url').value;
+                var umami_website_id = document.getElementById('umami_website_id').value;
                 var resultDiv = document.getElementById('config-result');
                 
                 var formData = new FormData();
                 formData.append('link', link);
                 formData.append('mtr_ver', mtr_ver);
+                formData.append('umami_script_url', umami_script_url);
+                formData.append('umami_website_id', umami_website_id);
                 
                 fetch('/admin/update-config-ajax', {
                     method: 'POST',
@@ -3120,6 +3237,9 @@ STATIONS_TEMPLATE = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>车站列表 - MTR路径查找器</title>
+    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
+    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
+    {% endif %}
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <style>
         * {
@@ -3385,6 +3505,9 @@ ROUTES_TEMPLATE = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>线路列表 - MTR路径查找器</title>
+    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
+    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
+    {% endif %}
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <style>
         * {
@@ -3826,6 +3949,9 @@ LOGIN_HTML = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MTR路径查找器 - 登录</title>
+    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
+    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
+    {% endif %}
     <style>
         * {
             margin: 0;
@@ -3987,6 +4113,8 @@ def update_config_ajax():
     
     config['LINK'] = request.form.get('link', '')
     config['MTR_VER'] = int(request.form.get('mtr_ver', 4))
+    config['UMAMI_SCRIPT_URL'] = request.form.get('umami_script_url', '')
+    config['UMAMI_WEBSITE_ID'] = request.form.get('umami_website_id', '')
     
     return jsonify({'success': True})
 
