@@ -1,7 +1,5 @@
 '''   
 Minecraft Transit Railway寻路程序
-'''   
-Minecraft Transit Railway寻路程序
 Find paths between two stations for Minecraft Transit Railway. 
 '''
 
@@ -28,25 +26,7 @@ import hashlib   #哈希算法库
 import json   #JSON数据处理
 import pickle   #Python对象序列化
 import re   #正则表达式处理
-#导入各种必要的库
-from difflib import SequenceMatcher   #用于字符串相似度比较
-from enum import Enum   #枚举类型定义
-from math import gcd, sqrt   #数学函数：最大公约数、平方根
-from operator import itemgetter   #用于排序操作
-from statistics import median_low   #统计学中位数计算
-from threading import Thread, BoundedSemaphore   #多线程和信号量控制
-from time import gmtime, strftime, time   #时间处理函数
-from typing import Union   #类型提示支持
-from queue import Queue   #队列数据结构
-import hashlib   #哈希算法库
-import json   #JSON数据处理
-import pickle   #Python对象序列化
-import re   #正则表达式处理
 
-#第三方库导入
-from opencc import OpenCC   #简繁中文转换工具
-import networkx as nx   #图论和网络分析库
-import requests   #HTTP请求库
 #第三方库导入
 from opencc import OpenCC   #简繁中文转换工具
 import networkx as nx   #图论和网络分析库
@@ -54,13 +34,9 @@ import requests   #HTTP请求库
 
 #添加Flask相关导入
 from flask import Flask, render_template_string, request, jsonify, session   #Flask Web框架组件
-#添加Flask相关导入
-from flask import Flask, render_template_string, request, jsonify, session   #Flask Web框架组件
 
-#创建Flask应用实例
 #创建Flask应用实例
 app = Flask(__name__)
-app.secret_key = 'mtr-pathfinder-secret-key-2024'   #用于session加密的密钥
 app.secret_key = 'mtr-pathfinder-secret-key-2024'   #用于session加密的密钥
 
 #启动时自动检查并更新数据
@@ -256,9 +232,6 @@ HTML_TEMPLATE = '''
     {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
     <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
     {% endif %}
-    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
-    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
-    {% endif %}
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <style>
         /* 全局样式 */
@@ -393,81 +366,6 @@ HTML_TEMPLATE = '''
             border-color: var(--primary-color);
             background: white;
             box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
-        }
-        
-        .shortcode-hint {
-            font-size: 0.75rem;
-            color: rgba(0, 0, 0, 0.6);
-            margin-top: 4px;
-        }
-        
-        .form-group.full-width {
-            grid-column: 1 / -1;
-        }
-        
-        .route-type-toggle {
-            display: flex;
-            position: relative;
-            width: 100%;
-            max-width: 360px;
-            margin: 12px 0;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            padding: 4px;
-        }
-        
-        .route-type-toggle input[type="radio"] {
-            display: none;
-        }
-        
-        .route-type-toggle label {
-            flex: 1;
-            text-align: center;
-            padding: 8px 12px;
-            color: rgba(255, 255, 255, 0.7);
-            cursor: pointer;
-            transition: all 0.3s ease;
-            z-index: 1;
-            font-weight: 500;
-            font-size: 0.9rem;
-            border-radius: 6px;
-            min-height: 38px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .toggle-slider {
-            position: absolute;
-            top: 4px;
-            left: 4px;
-            width: calc(50% - 4px);
-            height: calc(100% - 8px);
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 6px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 0;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
-        }
-        
-        .route-type-toggle input[type="radio"]:checked + label {
-            color: #fff;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-        }
-        
-        .route-type-labels {
-            display: flex;
-            justify-content: center;
-            gap: 60px;
-            max-width: 360px;
-            margin-top: 8px;
-            font-size: 0.75rem;
-            color: rgba(0, 0, 0, 0.5);
-        }
-        
-        .route-type-labels span {
-            min-width: 120px;
-            text-align: center;
         }
         
         .shortcode-hint {
@@ -1011,31 +909,13 @@ HTML_TEMPLATE = '''
                     </div>
                     
                     <div class="form-row">
-                        <div class="form-group full-width">
-                            <label for="shortCode">简码</label>
-                            <input type="text" id="shortCode" name="shortCode" placeholder="/路线 出发站;到达站;详细;理论;越野;禁高铁;禁船;仅轻铁">
-                            <div class="shortcode-hint">格式: /路线 出发站;到达站;[详细];[理论];[越野];[禁高铁];[禁船];[仅轻铁];[禁路线;路线;...];[禁车站;车站;...]</div>
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
                         <div class="form-group">
-                            <label for="avoidStations">禁车站 (用逗号或顿号分隔)</label>
-                            <input type="text" id="avoidStations" name="avoidStations" placeholder="例：尖沙咀,中环,旺角">
                             <label for="avoidStations">禁车站 (用逗号或顿号分隔)</label>
                             <input type="text" id="avoidStations" name="avoidStations" placeholder="例：尖沙咀,中环,旺角">
                         </div>
                         <div class="form-group">
-                            <label for="avoidRoutes">禁路线 (用逗号或顿号分隔)</label>
                             <label for="avoidRoutes">禁路线 (用逗号或顿号分隔)</label>
                             <input type="text" id="avoidRoutes" name="avoidRoutes" placeholder="例：荃湾线,观塘线">
-                        </div>
-                    </div>
-                    
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="onlyRoutes">仅路线 (用逗号或顿号分隔，留空则不限制)</label>
-                            <input type="text" id="onlyRoutes" name="onlyRoutes" placeholder="例：荃湾线,观塘线">
                         </div>
                     </div>
                     
@@ -1059,16 +939,6 @@ HTML_TEMPLATE = '''
                     <div class="route-type-labels">
                         <span>考虑等车时间</span>
                         <span>不考虑等车时间</span>
-                    <div class="route-type-toggle">
-                        <input type="radio" id="routeTypeWaiting" name="routeType" value="WAITING">
-                        <label for="routeTypeWaiting">实际路线</label>
-                        <input type="radio" id="routeTypeTheory" name="routeType" value="IN_THEORY">
-                        <label for="routeTypeTheory">理论路线</label>
-                        <div class="toggle-slider"></div>
-                    </div>
-                    <div class="route-type-labels">
-                        <span>考虑等车时间</span>
-                        <span>不考虑等车时间</span>
                     </div>
                 </div>
                 
@@ -1078,23 +948,17 @@ HTML_TEMPLATE = '''
                         <div class="checkbox-item">
                             <input type="checkbox" id="banHighSpeed" name="banHighSpeed">
                             <span>禁高铁</span>
-                            <input type="checkbox" id="banHighSpeed" name="banHighSpeed">
-                            <span>禁高铁</span>
                         </div>
                         <div class="checkbox-item">
-                            <input type="checkbox" id="banBoat" name="banBoat">
-                            <span>禁船</span>
                             <input type="checkbox" id="banBoat" name="banBoat">
                             <span>禁船</span>
                         </div>
                         <div class="checkbox-item">
                             <input type="checkbox" id="calculateWalkingWild" name="calculateWalkingWild">
                             <span>越野</span>
-                            <span>越野</span>
                         </div>
                         <div class="checkbox-item">
                             <input type="checkbox" id="onlyLRT" name="onlyLRT">
-                            <span>仅轻铁</span>
                             <span>仅轻铁</span>
                         </div>
                         <div class="checkbox-item">
@@ -1371,259 +1235,6 @@ HTML_TEMPLATE = '''
             setupShortCodeSync();
         });
         
-        // 简码解析函数
-        function parseShortCode(code) {
-            if (!code || !code.startsWith('/路线') && !code.startsWith('/路线 ')) {
-                return null;
-            }
-            
-            // 移除开头的/路线
-            let rest = code.replace(/^\/路线\s*/, '');
-            
-            // 用分号分割（支持中英文分号）
-            let parts = rest.split(/[;；]/).map(p => p.trim()).filter(p => p);
-            
-            if (parts.length < 2) {
-                return null;
-            }
-            
-            let result = {
-                startStation: parts[0],
-                endStation: parts[1],
-                routeType: 'WAITING',
-                banHighSpeed: false,
-                banBoat: false,
-                calculateWalkingWild: false,
-                onlyLRT: false,
-                detail: false,
-                avoidRoutes: '',
-                avoidStations: ''
-            };
-            
-            // 解析后续参数
-            for (let i = 2; i < parts.length; i++) {
-                let param = parts[i].toLowerCase();
-                
-                if (param === '详细' || param === 'detail') {
-                    result.detail = true;
-                } else if (param === '理论' || param === 'theory' || param === '实时') {
-                    result.routeType = 'IN_THEORY';
-                } else if (param === '越野' || param === 'wild') {
-                    result.calculateWalkingWild = true;
-                } else if (param === '禁高铁' || param === 'nohsr' || param === 'banhsr') {
-                    result.banHighSpeed = true;
-                } else if (param === '禁船' || param === 'noboat' || param === 'banboat') {
-                    result.banBoat = true;
-                } else if (param === '仅轻铁' || param === 'onlylrt' || param === 'lrt') {
-                    result.onlyLRT = true;
-                } else if (param.startsWith('禁路线') || param.startsWith('banroute') || param.startsWith('noroute') || param.startsWith('ban-route')) {
-                    // 格式: 禁路线;路线1;路线2;... 或 禁路线:路线1;路线2;...
-                    let routePart = parts[i];
-                    // 移除前缀
-                    let cleanPart = routePart.replace(/^(禁路线|banroute|noroute|ban-route)[:;；]*/i, '').trim();
-                    if (cleanPart) {
-                        // 如果当前部分就是路线名，直接使用
-                        result.avoidRoutes = cleanPart;
-                    } else {
-                        // 否则从后续部分收集路线名
-                        let routes = [];
-                        for (let j = i + 1; j < parts.length; j++) {
-                            let nextParam = parts[j].toLowerCase();
-                            // 遇到下一个参数名就停止
-                            if (nextParam === '详细' || nextParam === 'detail' || nextParam === '理论' || nextParam === 'theory' || 
-                                nextParam === '实时' || nextParam === '越野' || nextParam === 'wild' || nextParam === '禁高铁' || 
-                                nextParam === 'nohsr' || nextParam === 'banhsr' || nextParam === '禁船' || nextParam === 'noboat' || 
-                                nextParam === 'banboat' || nextParam === '仅轻铁' || nextParam === 'onlylrt' || nextParam === 'lrt' ||
-                                nextParam.startsWith('禁路线') || nextParam.startsWith('banroute') || nextParam.startsWith('noroute') ||
-                                nextParam.startsWith('禁车站') || nextParam.startsWith('banstation') || nextParam.startsWith('nostation')) {
-                                break;
-                            }
-                            routes.push(parts[j].trim());
-                        }
-                        if (routes.length > 0) {
-                            result.avoidRoutes = routes.join(',');
-                        }
-                    }
-                } else if (param.startsWith('禁车站') || param.startsWith('banstation') || param.startsWith('nostation') || param.startsWith('ban-station')) {
-                    // 格式: 禁车站;车站1;车站2;... 或 禁车站:车站1;车站2;...
-                    let stationPart = parts[i];
-                    // 移除前缀
-                    let cleanPart = stationPart.replace(/^(禁车站|banstation|nostation|ban-station)[:;；]*/i, '').trim();
-                    if (cleanPart) {
-                        // 如果当前部分就是车站名，直接使用
-                        result.avoidStations = cleanPart;
-                    } else {
-                        // 否则从后续部分收集车站名
-                        let stations = [];
-                        for (let j = i + 1; j < parts.length; j++) {
-                            let nextParam = parts[j].toLowerCase();
-                            // 遇到下一个参数名就停止
-                            if (nextParam === '详细' || nextParam === 'detail' || nextParam === '理论' || nextParam === 'theory' || 
-                                nextParam === '实时' || nextParam === '越野' || nextParam === 'wild' || nextParam === '禁高铁' || 
-                                nextParam === 'nohsr' || nextParam === 'banhsr' || nextParam === '禁船' || nextParam === 'noboat' || 
-                                nextParam === 'banboat' || nextParam === '仅轻铁' || nextParam === 'onlylrt' || nextParam === 'lrt' ||
-                                nextParam.startsWith('禁路线') || nextParam.startsWith('banroute') || nextParam.startsWith('noroute') ||
-                                nextParam.startsWith('禁车站') || nextParam.startsWith('banstation') || nextParam.startsWith('nostation')) {
-                                break;
-                            }
-                            stations.push(parts[j].trim());
-                        }
-                        if (stations.length > 0) {
-                            result.avoidStations = stations.join(',');
-                        }
-                    }
-                }
-            }
-            
-            return result;
-        }
-        
-        // 简码生成函数
-        function generateShortCode(data) {
-            let code = '/路线 ' + data.startStation + ';' + data.endStation;
-            
-            if (data.detail) {
-                code += ';详细';
-            }
-            
-            if (data.routeType === 'IN_THEORY') {
-                code += ';理论';
-            }
-            
-            if (data.calculateWalkingWild) {
-                code += ';越野';
-            }
-            
-            if (data.banHighSpeed) {
-                code += ';禁高铁';
-            }
-            
-            if (data.banBoat) {
-                code += ';禁船';
-            }
-            
-            if (data.onlyLRT) {
-                code += ';仅轻铁';
-            }
-            
-            if (data.avoidRoutes) {
-                code += ';禁路线;' + data.avoidRoutes.replace(/,/g, ';');
-            }
-            
-            if (data.avoidStations) {
-                code += ';禁车站;' + data.avoidStations.replace(/,/g, ';');
-            }
-            
-            return code;
-        }
-        
-        // 滑动开关逻辑
-        function setupRouteTypeToggle() {
-            const toggle = document.querySelector('.route-type-toggle');
-            if (!toggle) return;
-            
-            const slider = toggle.querySelector('.toggle-slider');
-            const waitingRadio = document.getElementById('routeTypeWaiting');
-            const theoryRadio = document.getElementById('routeTypeTheory');
-            
-            function updateSlider() {
-                if (theoryRadio.checked) {
-                    slider.style.left = '50%';
-                } else {
-                    slider.style.left = '0';
-                }
-            }
-            
-            waitingRadio.addEventListener('change', updateSlider);
-            theoryRadio.addEventListener('change', updateSlider);
-            
-            // 初始化滑块位置
-            updateSlider();
-        }
-        
-        // 双向同步
-        function setupShortCodeSync() {
-            const shortCodeInput = document.getElementById('shortCode');
-            const startInput = document.getElementById('startStation');
-            const endInput = document.getElementById('endStation');
-            const routeTypeWaiting = document.getElementById('routeTypeWaiting');
-            const routeTypeTheory = document.getElementById('routeTypeTheory');
-            const banHighSpeedInput = document.getElementById('banHighSpeed');
-            const banBoatInput = document.getElementById('banBoat');
-            const calculateWalkingWildInput = document.getElementById('calculateWalkingWild');
-            const onlyLRTInput = document.getElementById('onlyLRT');
-            const detailInput = document.getElementById('detail');
-            const avoidRoutesInput = document.getElementById('avoidRoutes');
-            const avoidStationsInput = document.getElementById('avoidStations');
-            
-            // 简码输入框变化时更新其他字段
-            shortCodeInput.addEventListener('input', function() {
-                const parsed = parseShortCode(this.value);
-                if (parsed) {
-                    // 总是更新起点和终点
-                    if (parsed.startStation) {
-                        startInput.value = parsed.startStation;
-                    }
-                    if (parsed.endStation) {
-                        endInput.value = parsed.endStation;
-                    }
-                    if (parsed.routeType === 'IN_THEORY') {
-                        routeTypeTheory.checked = true;
-                    } else {
-                        routeTypeWaiting.checked = true;
-                    }
-                    banHighSpeedInput.checked = parsed.banHighSpeed;
-                    banBoatInput.checked = parsed.banBoat;
-                    calculateWalkingWildInput.checked = parsed.calculateWalkingWild;
-                    onlyLRTInput.checked = parsed.onlyLRT;
-                    detailInput.checked = parsed.detail;
-                    if (parsed.avoidRoutes !== undefined) {
-                        avoidRoutesInput.value = parsed.avoidRoutes;
-                    }
-                    if (parsed.avoidStations !== undefined) {
-                        avoidStationsInput.value = parsed.avoidStations;
-                    }
-                }
-            });
-            
-            // 其他输入框变化时更新简码
-            function updateShortCode() {
-                const data = {
-                    startStation: startInput.value,
-                    endStation: endInput.value,
-                    routeType: routeTypeTheory.checked ? 'IN_THEORY' : 'WAITING',
-                    banHighSpeed: banHighSpeedInput.checked,
-                    banBoat: banBoatInput.checked,
-                    calculateWalkingWild: calculateWalkingWildInput.checked,
-                    onlyLRT: onlyLRTInput.checked,
-                    detail: detailInput.checked,
-                    avoidRoutes: avoidRoutesInput.value,
-                    avoidStations: avoidStationsInput.value
-                };
-                shortCodeInput.value = generateShortCode(data);
-            }
-            
-            // 为所有相关输入框添加事件监听
-            [startInput, endInput, banHighSpeedInput, banBoatInput, 
-             calculateWalkingWildInput, onlyLRTInput, detailInput, avoidRoutesInput, avoidStationsInput].forEach(input => {
-                input.addEventListener('input', updateShortCode);
-                input.addEventListener('change', updateShortCode);
-            });
-            
-            // 为单选按钮添加事件监听
-            routeTypeWaiting.addEventListener('change', updateShortCode);
-            routeTypeTheory.addEventListener('change', updateShortCode);
-            
-            // 初始化简码
-            updateShortCode();
-        }
-        
-        // 页面加载时设置双向同步和滑动开关
-        document.addEventListener('DOMContentLoaded', function() {
-            setupRouteTypeToggle();
-            setupShortCodeSync();
-        });
-        
         document.getElementById('routeForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -1634,14 +1245,10 @@ HTML_TEMPLATE = '''
                 routeType: formData.get('routeType'),
                 banHighSpeed: formData.get('banHighSpeed') === 'on',
                 banBoat: formData.get('banBoat') === 'on',
-                banHighSpeed: formData.get('banHighSpeed') === 'on',
-                banBoat: formData.get('banBoat') === 'on',
                 calculateWalkingWild: formData.get('calculateWalkingWild') === 'on',
                 onlyLRT: formData.get('onlyLRT') === 'on',
                 detail: formData.get('detail') === 'on',
                 avoidStations: formData.get('avoidStations'),
-                avoidRoutes: formData.get('avoidRoutes'),
-                onlyRoutes: formData.get('onlyRoutes')
                 avoidRoutes: formData.get('avoidRoutes'),
                 onlyRoutes: formData.get('onlyRoutes')
             };
@@ -1791,15 +1398,7 @@ def lcm(a: int, b: int) -> int:
 
 
 def get_distance(a_dict: dict, b_dict: dict, square: bool = False) -> float:
-def get_distance(a_dict: dict, b_dict: dict, square: bool = False) -> float:
     '''
-    获取两个车站之间的距离
-    '''
-    dist_square = (a_dict['x'] - b_dict['x']) ** 2 + \
-        (a_dict['z'] - b_dict['z']) ** 2  # 计算平方距离
-    if square is True:
-        return dist_square
-    return sqrt(dist_square)  # 返回实际距离
     获取两个车站之间的距离
     '''
     dist_square = (a_dict['x'] - b_dict['x']) ** 2 + \
@@ -1813,7 +1412,6 @@ def gen_route_interval(LOCAL_FILE_PATH, INTERVAL_PATH, LINK, MTR_VER) -> None:
     '''
     生成所有路线间隔数据
     '''
-    import requests
     with open(LOCAL_FILE_PATH, encoding='utf-8') as f:
         data = json.load(f)
 
@@ -2017,8 +1615,6 @@ def create_graph(data: list, IGNORED_LINES: bool,
                  WILD_ADDITION, TRANSFER_ADDITION,
                  MAX_WILD_BLOCKS, MTR_VER, cache,
                  ONLY_ROUTES: list = []) -> nx.MultiDiGraph:
-                 MAX_WILD_BLOCKS, MTR_VER, cache,
-                 ONLY_ROUTES: list = []) -> nx.MultiDiGraph:
     '''
     创建所有路线的图
     '''
@@ -2035,7 +1631,6 @@ def create_graph(data: list, IGNORED_LINES: bool,
             CALCULATE_BOAT is True and ONLY_LRT is False and \
             AVOID_STATIONS == [] and route_type == RouteType.WAITING:
         filename = f'mtr_pathfinder_temp{os.sep}' + \
-            f'{int(CALCULATE_HIGH_SPEED)}{int(CALCULATE_BOAT)}{int(CALCULATE_WALKING_WILD)}' + \
             f'{int(CALCULATE_HIGH_SPEED)}{int(CALCULATE_BOAT)}{int(CALCULATE_WALKING_WILD)}' + \
             f'-{version1}-{version2}.dat'
         if os.path.exists(filename):  # 缓存文件存在
@@ -2232,25 +1827,6 @@ def create_graph(data: list, IGNORED_LINES: bool,
 
 
         if cont is True:  # 跳过忽略的路线
-            continue
-
-        # 检查是否在仅路线列表中（如果设置了ONLY_ROUTES）
-        if ONLY_ROUTES:
-            TEMP_ONLY_ROUTES = [x.lower().strip() for x in ONLY_ROUTES if x != '']
-            route_in_only = False
-            for x in route_names:
-                x = x.lower().strip()
-                if x in TEMP_ONLY_ROUTES:
-                    route_in_only = True
-                    break
-                if x.isascii():
-                    continue
-                simp1 = opencc3.convert(x)  # 简体中文
-                if simp1 in TEMP_ONLY_ROUTES:
-                    route_in_only = True
-                    break
-            if not route_in_only:
-                continue
             continue
 
         # 检查是否在仅路线列表中（如果设置了ONLY_ROUTES）
@@ -2902,8 +2478,6 @@ def main(station1: str, station2: str, LINK: str,
          GEN_ROUTE_INTERVAL: bool = False, IGNORED_LINES: list = [],
          AVOID_STATIONS: list = [], ONLY_ROUTES: list = [],
          CALCULATE_HIGH_SPEED: bool = True,
-         AVOID_STATIONS: list = [], ONLY_ROUTES: list = [],
-         CALCULATE_HIGH_SPEED: bool = True,
          CALCULATE_BOAT: bool = True, CALCULATE_WALKING_WILD: bool = False,
          ONLY_LRT: bool = False, IN_THEORY: bool = False, DETAIL: bool = False,
          MTR_VER: int = 3, G=None, gen_image=True, show=False,
@@ -2995,7 +2569,6 @@ def main(station1: str, station2: str, LINK: str,
                          AVOID_STATIONS, route_type, ORIGINAL_IGNORED_LINES,
                          INTERVAL_PATH, version1, version2, LOCAL_FILE_PATH,
                          STATION_TABLE, WILD_ADDITION, TRANSFER_ADDITION,
-                         MAX_WILD_BLOCKS, MTR_VER, cache, ONLY_ROUTES)  # 创建图
                          MAX_WILD_BLOCKS, MTR_VER, cache, ONLY_ROUTES)  # 创建图
 
     # 查找最短路线
@@ -3198,15 +2771,6 @@ def split_by_comma(text: str) -> list:
     return [item.strip() for item in text.split(',') if item.strip()]
 
 
-def split_by_comma(text: str) -> list:
-    '''支持中英文逗号分隔'''
-    if not text:
-        return []
-    # 先替换中文逗号为英文逗号，再分割
-    text = text.replace('，', ',').replace('、', ',')
-    return [item.strip() for item in text.split(',') if item.strip()]
-
-
 @app.route('/find-route', methods=['POST'])
 def find_route():
     '''处理路径查找请求'''
@@ -3217,8 +2781,6 @@ def find_route():
         route_type_str = data.get('routeType', 'WAITING')
         CALCULATE_HIGH_SPEED = not data.get('banHighSpeed', False)
         CALCULATE_BOAT = not data.get('banBoat', False)
-        CALCULATE_HIGH_SPEED = not data.get('banHighSpeed', False)
-        CALCULATE_BOAT = not data.get('banBoat', False)
         CALCULATE_WALKING_WILD = data.get('calculateWalkingWild', False)
         ONLY_LRT = data.get('onlyLRT', False)
         DETAIL = data.get('detail', False)
@@ -3226,15 +2788,9 @@ def find_route():
         # 处理禁车站参数
         avoidStations = data.get('avoidStations', '')
         AVOID_STATIONS = split_by_comma(avoidStations)
-        AVOID_STATIONS = split_by_comma(avoidStations)
         
         # 处理禁路线参数
         avoidRoutes = data.get('avoidRoutes', '')
-        IGNORED_LINES = split_by_comma(avoidRoutes)
-        
-        # 处理仅路线参数
-        onlyRoutes = data.get('onlyRoutes', '')
-        ONLY_ROUTES = split_by_comma(onlyRoutes)
         IGNORED_LINES = split_by_comma(avoidRoutes)
         
         # 处理仅路线参数
@@ -3279,7 +2835,6 @@ def find_route():
             IGNORED_LINES=IGNORED_LINES,
             AVOID_STATIONS=AVOID_STATIONS,
             ONLY_ROUTES=ONLY_ROUTES,
-            ONLY_ROUTES=ONLY_ROUTES,
             CALCULATE_HIGH_SPEED=CALCULATE_HIGH_SPEED,
             CALCULATE_BOAT=CALCULATE_BOAT,
             CALCULATE_WALKING_WILD=CALCULATE_WALKING_WILD,
@@ -3314,13 +2869,7 @@ def find_route():
 # 全局配置
 # 优先从环境变量读取配置，若未设置则使用默认值
 ADMIN_PASSWORD = os.environ.get('MTR_ADMIN_PASSWORD', 'admin')   # 控制台密码，可修改
-# 优先从环境变量读取配置，若未设置则使用默认值
-ADMIN_PASSWORD = os.environ.get('MTR_ADMIN_PASSWORD', 'admin')   # 控制台密码，可修改
 config = {
-    'LINK': os.environ.get('MTR_LINK', 'https://letsplay.minecrafttransitrailway.com/system-map'),
-    'MTR_VER': int(os.environ.get('MTR_VER', 4)),
-    'UMAMI_SCRIPT_URL': os.environ.get('MTR_UMAMI_SCRIPT_URL', ''),   #Umami跟踪脚本URL
-    'UMAMI_WEBSITE_ID': os.environ.get('MTR_UMAMI_WEBSITE_ID', '')    #Umami网站ID
     'LINK': os.environ.get('MTR_LINK', 'https://letsplay.minecrafttransitrailway.com/system-map'),
     'MTR_VER': int(os.environ.get('MTR_VER', 4)),
     'UMAMI_SCRIPT_URL': os.environ.get('MTR_UMAMI_SCRIPT_URL', ''),   #Umami跟踪脚本URL
@@ -3335,9 +2884,6 @@ ADMIN_HTML = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MTR路径查找器 - 控制台</title>
-    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
-    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
-    {% endif %}
     {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
     <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
     {% endif %}
@@ -3540,19 +3086,10 @@ ADMIN_HTML = '''
                     <div class="form-group">
                         <label for="link">地图链接 (LINK)</label>
                         <input type="text" id="link" name="link" value="{{ config.LINK }}" placeholder="https://letsplay.minecrafttransitrailway.com/system-map"> required>
-                        <input type="text" id="link" name="link" value="{{ config.LINK }}" placeholder="https://letsplay.minecrafttransitrailway.com/system-map"> required>
                     </div>
                     <div class="form-group">
                         <label for="mtr_ver">MTR版本 (MTR_VER)</label>
                         <input type="number" id="mtr_ver" name="mtr_ver" value="{{ config.MTR_VER }}" min="1" max="10" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="umami_script_url">Umami脚本URL (src)</label>
-                        <input type="text" id="umami_script_url" name="umami_script_url" value="{{ config.UMAMI_SCRIPT_URL }}" placeholder="https://cloud.umami.is/script.js">
-                    </div>
-                    <div class="form-group">
-                        <label for="umami_website_id">Umami网站ID (data-website-id)</label>
-                        <input type="text" id="umami_website_id" name="umami_website_id" value="{{ config.UMAMI_WEBSITE_ID }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
                     </div>
                     <div class="form-group">
                         <label for="umami_script_url">Umami脚本URL (src)</label>
@@ -3582,15 +3119,11 @@ ADMIN_HTML = '''
                 var mtr_ver = document.getElementById('mtr_ver').value;
                 var umami_script_url = document.getElementById('umami_script_url').value;
                 var umami_website_id = document.getElementById('umami_website_id').value;
-                var umami_script_url = document.getElementById('umami_script_url').value;
-                var umami_website_id = document.getElementById('umami_website_id').value;
                 var resultDiv = document.getElementById('config-result');
                 
                 var formData = new FormData();
                 formData.append('link', link);
                 formData.append('mtr_ver', mtr_ver);
-                formData.append('umami_script_url', umami_script_url);
-                formData.append('umami_website_id', umami_website_id);
                 formData.append('umami_script_url', umami_script_url);
                 formData.append('umami_website_id', umami_website_id);
                 
@@ -3694,9 +3227,6 @@ STATIONS_TEMPLATE = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>车站列表 - MTR路径查找器</title>
-    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
-    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
-    {% endif %}
     {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
     <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
     {% endif %}
@@ -3965,9 +3495,6 @@ ROUTES_TEMPLATE = '''
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>线路列表 - MTR路径查找器</title>
-    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
-    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
-    {% endif %}
     {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
     <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
     {% endif %}
@@ -4415,9 +3942,6 @@ LOGIN_HTML = '''
     {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
     <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
     {% endif %}
-    {% if config['UMAMI_SCRIPT_URL'] and config['UMAMI_WEBSITE_ID'] %}
-    <script defer src="{{ config['UMAMI_SCRIPT_URL'] }}" data-website-id="{{ config['UMAMI_WEBSITE_ID'] }}"></script>
-    {% endif %}
     <style>
         * {
             margin: 0;
@@ -4579,8 +4103,6 @@ def update_config_ajax():
     
     config['LINK'] = request.form.get('link', '')
     config['MTR_VER'] = int(request.form.get('mtr_ver', 4))
-    config['UMAMI_SCRIPT_URL'] = request.form.get('umami_script_url', '')
-    config['UMAMI_WEBSITE_ID'] = request.form.get('umami_website_id', '')
     config['UMAMI_SCRIPT_URL'] = request.form.get('umami_script_url', '')
     config['UMAMI_WEBSITE_ID'] = request.form.get('umami_website_id', '')
     
